@@ -1,98 +1,90 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ControlButtons from '../components/ControlButtons';
+import DurationSlider from '../components/DurationSlider';
+import Header from '../components/Header';
+import SettingSwitch from '../components/SettingSwitch';
+import TimerRing from '../components/TimerRing';
+import { colors } from '../constants/colors';
+import { SECONDS_PER_MINUTE } from '../constants/timer';
+import { formatTime } from '../utils/formatTime';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function Index() {
+  const [isRunning, setIsRunning] = useState(false);
+  const [durationMinutes, setDurationMinutes] = useState(5);
+  const [secondsLeft, setSecondsLeft] = useState(5 * SECONDS_PER_MINUTE);
+  const [showSeconds, setShowSeconds] = useState(true);
+  const [repeat, setRepeat] = useState(false);
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
+  // Efecto del reloj
+  useEffect(() => {
+    if (!isRunning) return;
+    const id = setInterval(() => {
+      setSecondsLeft((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isRunning]);
+
+  // Efecto al llegar a cero
+  useEffect(() => {
+    if (secondsLeft > 0) return;
+    if (repeat) {
+      setSecondsLeft(durationMinutes * SECONDS_PER_MINUTE);
+    } else {
+      setIsRunning(false);
+    }
+  }, [secondsLeft, repeat, durationMinutes]);
+
+  function handleDurationChange(minutes: number) {
+    setDurationMinutes(minutes);
+    setSecondsLeft(minutes * SECONDS_PER_MINUTE);
+    setIsRunning(false);
   }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
+
+  function handleStart() {
+    if (secondsLeft === 0) setSecondsLeft(durationMinutes * SECONDS_PER_MINUTE);
+    setIsRunning(true);
   }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+
+  const progress = secondsLeft / (durationMinutes * SECONDS_PER_MINUTE);
+  const isDone = secondsLeft === 0;
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.content}>
+        <Header />
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+        <TimerRing progress={progress} timeText={formatTime(secondsLeft, showSeconds)} />
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+        {isDone && (
+          <View style={styles.done}>
+            <View style={styles.doneDot} />
+            <Text style={styles.doneText}>¡Listo! Hora de volver</Text>
+          </View>
+        )}
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        <ControlButtons
+          isRunning={isRunning}
+          onStart={handleStart}
+          onPause={() => setIsRunning(false)}
+        />
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        <View style={styles.settings}>
+          <SettingSwitch label="Repetir al terminar" value={repeat} onChange={setRepeat} />
+          <DurationSlider minutes={durationMinutes} onChange={handleDurationChange} />
+          <SettingSwitch label="Mostrar segundos" value={showSeconds} onChange={setShowSeconds} />
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  screen: { flex: 1, backgroundColor: colors.background },
+  content: { flex: 1, padding: 20, gap: 20 },
+  done: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  doneDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning },
+  doneText: { fontSize: 14, color: colors.textMuted },
+  settings: { backgroundColor: colors.card, borderRadius: 20, padding: 20, gap: 16 },
 });
